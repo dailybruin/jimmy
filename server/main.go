@@ -16,7 +16,11 @@ var (
 
 func main() {
     flag.Parse()
-    http.HandleFunc("/", makeHandler(rootHandler))
+    r, err := getRouter()
+    if err != nil {
+        //handle error
+    }
+    http.Handle("/", r)
 
     if *addr {
         l, err := net.Listen("tcp", "127.0.0.1:0")
