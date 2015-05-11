@@ -2,12 +2,12 @@ package main
 
 import (
     "flag"
-    "html/template"
+    //"html/template"
     "io/ioutil"
     "log"
     "net"
     "net/http"
-    "regexp"
+    //"regexp"
 )
 
 var (
