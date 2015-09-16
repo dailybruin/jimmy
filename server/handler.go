@@ -116,7 +116,7 @@ func oauthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(OAuth)
 
-	_, MongoErr := mgo.Dial(MONGO_URL)
+	session, MongoErr := mgo.Dial(MONGO_URL)
 	if MongoErr != nil {
 	}
 
@@ -125,13 +125,16 @@ func oauthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		ExpiresOn string
 	}
 	type User struct {
-		Login  string
-		Cookie Cookie
+		Login        string
+		Cookie       Cookie
+		Access_token string
 	}
-	//UsersCollection := session.DB("jimmy").C("users")
-	//UsersCollection.Upsert(User{Username: ""})
-
 	var authUser User
 	gitHubGet("/user", &authUser)
+	authUser.Access_token = OAuth.Access_token
 	fmt.Println(authUser)
+
+	UsersCollection := session.DB("jimmy").C("users")
+	UsersCollection.Upsert(User{Login: authUser.Login}, authUser)
+
 }
