@@ -10,9 +10,9 @@ func getRouter() (*mux.Router, error) {
 	fs := http.FileServer(http.Dir("static"))
 	r := mux.NewRouter()
 	r.HandleFunc("/", indexHandler)
-	r.Handle("/static/{(.+/?)*}", http.StripPrefix("/static/", fs))
+	//r.Handle("/static/{(.+/?)*}", http.StripPrefix("/static/", fs))
 	// Alternatively, use PathPrefix. However, PathPrefix will show directory of files
-	//r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
 	return r, nil
 }
 
