@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
@@ -120,21 +121,22 @@ func oauthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	if MongoErr != nil {
 	}
 
-	type Cookie struct {
-		Value     string
-		ExpiresOn string
-	}
 	type User struct {
 		Login        string
-		Cookie       Cookie
+		Email        string
+		Cookie       http.Cookie
 		Access_token string
 	}
 	var authUser User
 	gitHubGet("/user", &authUser)
+	hash := md5.Sum([]byte(fmt.Sprintf("%v%v", authUser.Login, authUser.Email)))
 	authUser.Access_token = OAuth.Access_token
-	fmt.Println(authUser)
+	authUser.Cookie = http.Cookie{
+		Name:  "DBJimmyAuth",
+		Value: string(hash[:16]),
+	}
+	http.SetCookie(w, &authUser.Cookie)
 
 	UsersCollection := session.DB("jimmy").C("users")
 	UsersCollection.Upsert(User{Login: authUser.Login}, authUser)
-
 }
