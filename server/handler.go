@@ -149,16 +149,19 @@ func oauthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 func getAuth(w http.ResponseWriter, r *http.Request, c chan *User) {
 	cookie, cookieErr := r.Cookie("DBJimmyAuth")
 	if cookieErr != nil {
+		fmt.Println("Cookie Error")
 		c <- nil
 	}
 	session, mongoErr := mgo.Dial(MONGO_URL)
 	if mongoErr != nil {
+		fmt.Println("Mongo Error")
 		c <- nil
 	}
 	var user User
 	usersCollection := session.DB("jimmy").C("users")
-	queryErr := usersCollection.Find(bson.M{"cookie": cookie}).One(&user)
+	queryErr := usersCollection.Find(bson.M{"cookie": cookie.Value}).One(&user)
 	if queryErr != nil {
+		fmt.Println("Query Error")
 		c <- nil
 	}
 	c <- &user
@@ -167,10 +170,27 @@ func getAuth(w http.ResponseWriter, r *http.Request, c chan *User) {
 func dashHandler(w http.ResponseWriter, r *http.Request) {
 	c := make(chan *User)
 	go getAuth(w, r, c)
-	//user := <-c
+	user := <-c
+	fmt.Println(user)
 	type Template struct {
 		Client_id string
 	}
+	gitHubGet := gitHubGet(user.Access_token)
+	type Org struct {
+		Login       string `json:"login"`
+		Id          int    `json:"id"`
+		Url         string `json:"url"`
+		Avatar_url  string `json:"avatar_url"`
+		Description string `json:"description"`
+	}
+	type Orgs struct {
+		Org []Org `json:"array"`
+	}
+	var orgs interface{}
+	err := gitHubGet("/user/orgs", &orgs)
+	fmt.Println(orgs)
+	fmt.Println(err)
+	//gitHubGet("orgs/daily-bruin/repos")
 
 	t, _ := template.ParseFiles("templates/dashboard.html")
 	t.Execute(w, nil)
