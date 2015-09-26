@@ -2,12 +2,12 @@ package main
 
 import (
 	"bytes"
-	"crypto/md5"
+	//"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	"gopkg.in/mgo.v2"
-	//"gopkg.in/mgo.v2/bson"
+	"gopkg.in/mgo.v2/bson"
 	"html/template"
 	"net/http"
 	"net/url"
@@ -25,6 +25,7 @@ func getRouter() (*mux.Router, error) {
 	r := mux.NewRouter()
 	r.HandleFunc("/", indexHandler)
 	r.HandleFunc("/oauth_callback", oauthCallbackHandler)
+	r.HandleFunc("/dashboard", dashHandler)
 	//r.Handle("/static/{(.+/?)*}", http.StripPrefix("/static/", fs))
 	// Alternatively, use PathPrefix. However, PathPrefix will show directory of files
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
@@ -88,6 +89,13 @@ func gitHubGet(access_token string) func(string, interface{}) error {
 	}
 }
 
+type User struct {
+	Login        string
+	Email        string
+	Cookie       string
+	Access_token string
+}
+
 func oauthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.FormValue("code")
 	data := url.Values{}
@@ -117,26 +125,53 @@ func oauthCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println(OAuth)
 
-	session, MongoErr := mgo.Dial(MONGO_URL)
-	if MongoErr != nil {
+	session, mongoErr := mgo.Dial(MONGO_URL)
+	if mongoErr != nil {
 	}
 
-	type User struct {
-		Login        string
-		Email        string
-		Cookie       http.Cookie
-		Access_token string
-	}
 	var authUser User
 	gitHubGet("/user", &authUser)
-	hash := md5.Sum([]byte(fmt.Sprintf("%v%v", authUser.Login, authUser.Email)))
+	//hash := md5.Sum([]byte(fmt.Sprintf("%v%v", authUser.Login, authUser.Email)))
 	authUser.Access_token = OAuth.Access_token
-	authUser.Cookie = http.Cookie{
+	//authUser.Cookie = string(hash[:16])
+	authUser.Cookie = fmt.Sprintf("%v%v", authUser.Login, authUser.Email)
+	cookie := http.Cookie{
 		Name:  "DBJimmyAuth",
-		Value: string(hash[:16]),
+		Value: authUser.Cookie,
 	}
-	http.SetCookie(w, &authUser.Cookie)
+	http.SetCookie(w, &cookie)
 
-	UsersCollection := session.DB("jimmy").C("users")
-	UsersCollection.Upsert(User{Login: authUser.Login}, authUser)
+	usersCollection := session.DB("jimmy").C("users")
+	usersCollection.Upsert(bson.M{"login": authUser.Login}, authUser)
+	http.Redirect(w, r, "/dashboard", 303)
+}
+
+func getAuth(w http.ResponseWriter, r *http.Request, c chan *User) {
+	cookie, cookieErr := r.Cookie("DBJimmyAuth")
+	if cookieErr != nil {
+		c <- nil
+	}
+	session, mongoErr := mgo.Dial(MONGO_URL)
+	if mongoErr != nil {
+		c <- nil
+	}
+	var user User
+	usersCollection := session.DB("jimmy").C("users")
+	queryErr := usersCollection.Find(bson.M{"cookie": cookie}).One(&user)
+	if queryErr != nil {
+		c <- nil
+	}
+	c <- &user
+}
+
+func dashHandler(w http.ResponseWriter, r *http.Request) {
+	c := make(chan *User)
+	go getAuth(w, r, c)
+	//user := <-c
+	type Template struct {
+		Client_id string
+	}
+
+	t, _ := template.ParseFiles("templates/dashboard.html")
+	t.Execute(w, nil)
 }
