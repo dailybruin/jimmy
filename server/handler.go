@@ -26,6 +26,7 @@ func getRouter() (*mux.Router, error) {
 	r.HandleFunc("/", indexHandler)
 	r.HandleFunc("/oauth_callback", oauthCallbackHandler)
 	r.HandleFunc("/dashboard", dashHandler)
+	r.HandleFunc("/repo/{repo}/", trackRepoHandler).Methods("POST")
 	//r.Handle("/static/{(.+/?)*}", http.StripPrefix("/static/", fs))
 	// Alternatively, use PathPrefix. However, PathPrefix will show directory of files
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
@@ -90,6 +91,10 @@ func gitHubGet(access_token string) func(string, interface{}) error {
 		}
 		return nil
 	}
+}
+
+func gitHubPost(access_token string) func(string, map[string]string, interface{}) error {
+	return nil
 }
 
 type User struct {
@@ -174,7 +179,6 @@ func dashHandler(w http.ResponseWriter, r *http.Request) {
 	c := make(chan *User)
 	go getAuth(w, r, c)
 	user := <-c
-	fmt.Println(user)
 	gitHubGet := gitHubGet(user.Access_token)
 	type Org struct {
 		Login       string `json:"login"`
@@ -210,4 +214,14 @@ func dashHandler(w http.ResponseWriter, r *http.Request) {
 	data.Repos = repos
 	t, _ := template.ParseFiles("templates/dashboard.html")
 	t.Execute(w, data)
+}
+
+func trackRepoHandler(w http.ResponseWriter, r *http.Request) {
+	c := make(chan *User)
+	go getAuth(w, r, c)
+	user := <-c
+	gitHubGet := gitHubGet(user.Access_token)
+
+	vars := mux.Vars(request)
+	repo := vars["repo"]
 }
