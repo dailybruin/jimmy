@@ -110,7 +110,6 @@ func gitHubPost(access_token string) func(string, interface{}) (*http.Response, 
 		if reqErr != nil {
 			return nil, reqErr
 		}
-		fmt.Println(res)
 		return res, nil
 	}
 }
@@ -249,12 +248,13 @@ func trackRepoHandler(w http.ResponseWriter, r *http.Request) {
 		Active bool        `json:"active"`
 	}
 	data.Name = "web"
-	var config struct {
+	type Config struct {
 		Url          string `json:"url"`
 		Content_type string `json:"content_type"`
 		Secret       string `json:"secret"`
 		Insecure_ssl string `json:"insecure_ssl"`
 	}
+	var config Config
 	config.Url = "http://localhost"
 	config.Content_type = "json"
 	config.Secret = "SOME_SECRET_YOU_SHOULD_PROBABLY_CHANGE"
@@ -267,4 +267,18 @@ func trackRepoHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(gitHubPostErr)
 	}
 	fmt.Printf("response: %v", gitHubPostRes)
+	var webHookRes struct {
+		Id     int    `json:"id"`
+		Name   string `json:"name"`
+		Active bool   `json:"active"`
+		Config Config `json:"config"`
+	}
+	jsonDecodeErr := json.NewDecoder(gitHubPostRes.Body).Decode(&webHookRes)
+
+	// should consider moving this to gitHubPost like gitHubGet
+	defer gitHubPostRes.Body.Close()
+
+	if jsonDecodeErr != nil {
+		fmt.Println(jsonDecodeErr)
+	}
 }
