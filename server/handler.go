@@ -78,7 +78,10 @@ func gitHubGet(access_token string) func(string, interface{}) error {
 		req.Header.Set("Authorization", fmt.Sprintf("token %s", access_token))
 
 		client := &http.Client{}
-		res, _ := client.Do(req)
+		res, reqErr := client.Do(req)
+		if reqErr != nil {
+			return reqErr
+		}
 		defer res.Body.Close()
 
 		jsonDecodeErr := json.NewDecoder(res.Body).Decode(data)
@@ -172,9 +175,6 @@ func dashHandler(w http.ResponseWriter, r *http.Request) {
 	go getAuth(w, r, c)
 	user := <-c
 	fmt.Println(user)
-	type Template struct {
-		Client_id string
-	}
 	gitHubGet := gitHubGet(user.Access_token)
 	type Org struct {
 		Login       string `json:"login"`
@@ -186,12 +186,28 @@ func dashHandler(w http.ResponseWriter, r *http.Request) {
 	type Orgs struct {
 		Org []Org `json:"array"`
 	}
-	var orgs interface{}
+	var orgs []Org
 	err := gitHubGet("/user/orgs", &orgs)
+	if err != nil {
+		fmt.Println("get orgs error")
+		fmt.Println(err)
+	}
 	fmt.Println(orgs)
-	fmt.Println(err)
-	//gitHubGet("orgs/daily-bruin/repos")
-
+	var repos []interface{}
+	for _, v := range orgs {
+		if v.Login == "daily-bruin" {
+			repoGetErr := gitHubGet("/orgs/daily-bruin/repos", &repos)
+			if repoGetErr != nil {
+				fmt.Println(repoGetErr)
+			}
+			break
+		}
+	}
+	fmt.Println(repos)
+	var data struct {
+		Repos []interface{}
+	}
+	data.Repos = repos
 	t, _ := template.ParseFiles("templates/dashboard.html")
-	t.Execute(w, nil)
+	t.Execute(w, data)
 }
