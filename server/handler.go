@@ -76,7 +76,6 @@ func gitHubGet(access_token string) func(string, interface{}) error {
 			return err
 		}
 		req.Header.Set("Authorization", fmt.Sprintf("token %s", access_token))
-		req.Header.Set("Authorization", fmt.Sprintf("token %s", access_token))
 
 		client := &http.Client{}
 		res, reqErr := client.Do(req)
@@ -94,7 +93,26 @@ func gitHubGet(access_token string) func(string, interface{}) error {
 }
 
 func gitHubPost(access_token string) func(string, map[string]string, interface{}) error {
-	return nil
+	return func(uri string, params map[string]string, data interface{}) error {
+		form := url.Values{}
+		for key, value := range params {
+			form.Add(key, value)
+		}
+
+		req, err := http.NewRequest("POST", fmt.Springf("htps://api.github.com%s", uri), strings.NewReader(form.Encode()))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", fmt.Sprintf("token %s", access_token))
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		client := http.Client{}
+		res, reqErr := client.Do(req)
+		if reqErr != nil {
+			return reqErr
+		}
+		data = res
+		return nil
+	}
 }
 
 type User struct {
@@ -220,8 +238,34 @@ func trackRepoHandler(w http.ResponseWriter, r *http.Request) {
 	c := make(chan *User)
 	go getAuth(w, r, c)
 	user := <-c
-	gitHubGet := gitHubGet(user.Access_token)
+	gitHubPost := gitHubPost(user.Access_token)
 
 	vars := mux.Vars(request)
 	repo := vars["repo"]
+	var data struct {
+		Name   string
+		Config interface{}
+		Events []string
+		Active bool
+	}
+	data.Name = "web"
+	var config struct {
+		Url          string
+		Content_type string
+		Secret       string
+		Insecure_ssl string
+	}
+	config.url = "http://localhost"
+	config.content_type = "json"
+	config.secret = "SOME_SECRET_YOU_SHOULD_PROBABLY_CHANGE"
+	config.insecure_ssl = "0"
+	c, configJSONErr := json.Marshal(config)
+	if configJSONErr != nil {
+		fmt.Println(configJSONErr)
+	}
+	data.Config = c
+	data.Events = [1]string{"pull_request"}
+	data.Active = true
+	var res interface{}
+	gitHubPost(fmt.Sprintf("/repos/daily-bruin/%s/hooks", repo), data, res)
 }
