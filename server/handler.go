@@ -26,7 +26,7 @@ func getRouter() (*mux.Router, error) {
 	r.HandleFunc("/", indexHandler)
 	r.HandleFunc("/oauth_callback", oauthCallbackHandler)
 	r.HandleFunc("/dashboard", dashHandler)
-	r.HandleFunc("/repo/{repo}/", trackRepoHandler).Methods("POST")
+	r.HandleFunc("/repo/{repo}", trackRepoHandler).Methods("POST")
 	//r.Handle("/static/{(.+/?)*}", http.StripPrefix("/static/", fs))
 	// Alternatively, use PathPrefix. However, PathPrefix will show directory of files
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
@@ -92,26 +92,26 @@ func gitHubGet(access_token string) func(string, interface{}) error {
 	}
 }
 
-func gitHubPost(access_token string) func(string, map[string]string, interface{}) error {
-	return func(uri string, params map[string]string, data interface{}) error {
-		form := url.Values{}
-		for key, value := range params {
-			form.Add(key, value)
+func gitHubPost(access_token string) func(string, interface{}) (*http.Response, error) {
+	return func(uri string, params interface{}) (*http.Response, error) {
+		json, jsonMarshalErr := json.Marshal(params)
+		if jsonMarshalErr != nil {
+			return nil, jsonMarshalErr
 		}
-
-		req, err := http.NewRequest("POST", fmt.Springf("htps://api.github.com%s", uri), strings.NewReader(form.Encode()))
+		fmt.Println(string(json))
+		req, err := http.NewRequest("POST", fmt.Sprintf("https://api.github.com%s", uri), bytes.NewBuffer(json))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		req.Header.Set("Authorization", fmt.Sprintf("token %s", access_token))
-		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Add("Content-Type", "application/json")
 		client := http.Client{}
 		res, reqErr := client.Do(req)
 		if reqErr != nil {
-			return reqErr
+			return nil, reqErr
 		}
-		data = res
-		return nil
+		fmt.Println(res)
+		return res, nil
 	}
 }
 
@@ -240,32 +240,31 @@ func trackRepoHandler(w http.ResponseWriter, r *http.Request) {
 	user := <-c
 	gitHubPost := gitHubPost(user.Access_token)
 
-	vars := mux.Vars(request)
+	vars := mux.Vars(r)
 	repo := vars["repo"]
 	var data struct {
-		Name   string
-		Config interface{}
-		Events []string
-		Active bool
+		Name   string      `json:"name"`
+		Config interface{} `json:"config"`
+		Events []string    `json:"events"`
+		Active bool        `json:"active"`
 	}
 	data.Name = "web"
 	var config struct {
-		Url          string
-		Content_type string
-		Secret       string
-		Insecure_ssl string
+		Url          string `json:"url"`
+		Content_type string `json:"content_type"`
+		Secret       string `json:"secret"`
+		Insecure_ssl string `json:"insecure_ssl"`
 	}
-	config.url = "http://localhost"
-	config.content_type = "json"
-	config.secret = "SOME_SECRET_YOU_SHOULD_PROBABLY_CHANGE"
-	config.insecure_ssl = "0"
-	c, configJSONErr := json.Marshal(config)
-	if configJSONErr != nil {
-		fmt.Println(configJSONErr)
-	}
-	data.Config = c
-	data.Events = [1]string{"pull_request"}
+	config.Url = "http://localhost"
+	config.Content_type = "json"
+	config.Secret = "SOME_SECRET_YOU_SHOULD_PROBABLY_CHANGE"
+	config.Insecure_ssl = "0"
+	data.Config = config
+	data.Events = []string{"pull_request"}
 	data.Active = true
-	var res interface{}
-	gitHubPost(fmt.Sprintf("/repos/daily-bruin/%s/hooks", repo), data, res)
+	gitHubPostRes, gitHubPostErr := gitHubPost(fmt.Sprintf("/repos/daily-bruin/%s/hooks", repo), data)
+	if gitHubPostErr != nil {
+		fmt.Println(gitHubPostErr)
+	}
+	fmt.Printf("response: %v", gitHubPostRes)
 }
